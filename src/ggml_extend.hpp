@@ -1210,15 +1210,18 @@ __STATIC_INLINE__ ggml_tensor* ggml_ext_conv_3d(ggml_context* ctx,
                                                 int p2 = 0,
                                                 int d0 = 1,
                                                 int d1 = 1,
-                                                int d2 = 1) {
+                                                int d2 = 1,
+                                                bool use_direct = false) {
     int64_t OC = w->ne[3] / IC;
     int64_t N  = x->ne[3] / IC;
-    if (N == 1) {
+    if (use_direct && N == 1) {
         // ggml-metal has no IM2COL_3D kernel, so the default ggml_conv_3d
         // (im2col + matmul) decomposition aborts on Apple GPUs. Metal DOES
         // implement the fused GGML_OP_CONV_3D op, and with batch == 1 the two
-        // paths produce byte-identical layouts ([OC, OD, OH, OW]) — batch is
+        // paths produce identical layouts ([OC, OD, OH, OW]) — batch is
         // always 1 for the Wan diffusion + VAE graphs this path serves.
+        // Callers pass use_direct=true only when the runner's backend is
+        // Metal; CPU keeps the battle-tested im2col_3d decomposition.
         // The direct op only accepts F16/F32 kernels, so up-cast quantized
         // conv weights (they're a negligible slice of the checkpoint).
         if (ggml_is_quantized(w->type)) {
@@ -3272,10 +3275,17 @@ public:
                 b = ctx->weight_adapter->patch_weight(ctx->ggml_ctx, ctx->backend, b, prefix + "bias");
             }
         }
+        // Metal has no IM2COL_3D kernel — use the fused direct op there.
+        // Everywhere else (CPU) keep upstream's im2col_3d decomposition.
+        // The Metal backend names itself "MTL<i>" (GGML_METAL_NAME).
+        const char* backend_name = ctx->backend ? ggml_backend_name(ctx->backend) : "";
+        bool use_direct          = strncmp(backend_name, "MTL", 3) == 0 ||
+                                   strstr(backend_name, "Metal") != nullptr;
         return ggml_ext_conv_3d(ctx->ggml_ctx, x, w, b, in_channels,
                                 std::get<2>(stride), std::get<1>(stride), std::get<0>(stride),
                                 std::get<2>(padding), std::get<1>(padding), std::get<0>(padding),
-                                std::get<2>(dilation), std::get<1>(dilation), std::get<0>(dilation));
+                                std::get<2>(dilation), std::get<1>(dilation), std::get<0>(dilation),
+                                use_direct);
     }
 };
 
