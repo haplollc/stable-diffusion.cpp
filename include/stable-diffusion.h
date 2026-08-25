@@ -182,6 +182,13 @@ typedef struct {
     const char* tensor_type_rules;
     bool vae_decode_only;
     bool free_params_immediately;
+    // Free ONLY the text encoder's params right after conditioning, leaving
+    // diffusion + VAE lifetimes untouched. On memory-capped mobile targets
+    // the encoder (umt5-xxl ~3 GB) is dead weight during sampling; freeing
+    // it is the difference between fitting the per-process limit and a
+    // jetsam kill. The engine must be torn down after generation — the
+    // freed encoder does not reload on reuse.
+    bool free_cond_stage_immediately;
     int n_threads;
     enum sd_type_t wtype;
     enum rng_type_t rng_type;

@@ -120,7 +120,8 @@ public:
     SDVersion version;
     bool vae_decode_only         = false;
     bool external_vae_is_invalid = false;
-    bool free_params_immediately = false;
+    bool free_params_immediately      = false;
+    bool free_cond_stage_immediately  = false;
 
     bool circular_x = false;
     bool circular_y = false;
@@ -193,7 +194,8 @@ public:
     bool init(const sd_ctx_params_t* sd_ctx_params) {
         n_threads               = sd_ctx_params->n_threads;
         vae_decode_only         = sd_ctx_params->vae_decode_only;
-        free_params_immediately = sd_ctx_params->free_params_immediately;
+        free_params_immediately     = sd_ctx_params->free_params_immediately;
+        free_cond_stage_immediately = sd_ctx_params->free_cond_stage_immediately;
         offload_params_to_cpu   = sd_ctx_params->offload_params_to_cpu;
         max_vram                = sd_ctx_params->max_vram;
 
@@ -3303,7 +3305,7 @@ static std::optional<ImageGenerationEmbeds> prepare_image_generation_embeds(sd_c
     int64_t t1 = ggml_time_ms();
     LOG_INFO("get_learned_condition completed, taking %.2fs", (t1 - prepare_start_ms) * 1.0f / 1000);
 
-    if (sd_ctx->sd->free_params_immediately) {
+    if (sd_ctx->sd->free_params_immediately || sd_ctx->sd->free_cond_stage_immediately) {
         sd_ctx->sd->cond_stage_model->free_params_buffer();
     }
 
@@ -3946,7 +3948,7 @@ static ImageGenerationEmbeds prepare_video_generation_embeds(sd_ctx_t* sd_ctx,
     int64_t t1 = ggml_time_ms();
     LOG_INFO("get_learned_condition completed, taking %.2fs", (t1 - prepare_start_ms) * 1.0f / 1000);
 
-    if (sd_ctx->sd->free_params_immediately) {
+    if (sd_ctx->sd->free_params_immediately || sd_ctx->sd->free_cond_stage_immediately) {
         sd_ctx->sd->cond_stage_model->free_params_buffer();
     }
     return embeds;
