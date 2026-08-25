@@ -1213,7 +1213,22 @@ __STATIC_INLINE__ ggml_tensor* ggml_ext_conv_3d(ggml_context* ctx,
                                                 int d2 = 1) {
     int64_t OC = w->ne[3] / IC;
     int64_t N  = x->ne[3] / IC;
-    x          = ggml_conv_3d(ctx, w, x, IC, s0, s1, s2, p0, p1, p2, d0, d1, d2);
+    if (N == 1) {
+        // ggml-metal has no IM2COL_3D kernel, so the default ggml_conv_3d
+        // (im2col + matmul) decomposition aborts on Apple GPUs. Metal DOES
+        // implement the fused GGML_OP_CONV_3D op, and with batch == 1 the two
+        // paths produce byte-identical layouts ([OC, OD, OH, OW]) — batch is
+        // always 1 for the Wan diffusion + VAE graphs this path serves.
+        // The direct op only accepts F16/F32 kernels, so up-cast quantized
+        // conv weights (they're a negligible slice of the checkpoint).
+        if (ggml_is_quantized(w->type)) {
+            w = ggml_cast(ctx, w, GGML_TYPE_F16);
+        }
+        x = ggml_conv_3d_direct(ctx, w, x, s0, s1, s2, p0, p1, p2, d0, d1, d2,
+                                (int)IC, (int)N, (int)OC);
+    } else {
+        x = ggml_conv_3d(ctx, w, x, IC, s0, s1, s2, p0, p1, p2, d0, d1, d2);
+    }
 
     if (b != nullptr) {
         b = ggml_reshape_4d(ctx, b, 1, 1, 1, b->ne[0]);  // [OC, 1, 1, 1]
