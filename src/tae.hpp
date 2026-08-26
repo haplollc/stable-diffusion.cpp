@@ -475,6 +475,10 @@ public:
 
     ggml_tensor* encode(GGMLRunnerContext* ctx, ggml_tensor* x) {
         auto encoder = std::dynamic_pointer_cast<TinyVideoEncoder>(blocks["encoder"]);
+        // A decode-only TAEHV has no encoder block — fail loudly instead of
+        // segfaulting three frames deeper (seen on iPhone i2v with
+        // vae_decode_only left at its default true).
+        GGML_ASSERT(encoder != nullptr && "TAEHV encoder missing: loaded decode-only");
         // (W, H, T, C) -> (W, H, C, T)
         x                  = ggml_cont(ctx->ggml_ctx, ggml_permute(ctx->ggml_ctx, x, 0, 1, 3, 2));
         int64_t num_frames = x->ne[3];
